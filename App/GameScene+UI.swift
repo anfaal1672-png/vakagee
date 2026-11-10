@@ -14,13 +14,12 @@ extension GameScene {
         uiLayer.removeAllChildren()
         topFx.removeAllChildren()
         fxLayer.removeAllChildren()
-        worldLayer.removeAllChildren()
         hintNode?.removeFromParent()
         hintNode = nil
         hudLayer.isHidden = true
         worldState = .normal
         spec = LevelGenerator.make(level: save.level)
-        applyColors()
+        world.showIdle(skin: save.selectedSkin, level: save.level)
         audio.setBGMRate(1.0)
 
         // 下から積み上げる位置と、上から吊るす位置
@@ -31,8 +30,6 @@ extension GameScene {
         let logoBottomY = logoTopY - 100
         let subY = logoBottomY - 80
         let tickerY = subY - 30
-        let heroY = (tickerY + startY) / 2
-        let heroSize = min(120, max(50, tickerY - startY - 90))
 
         let rays = Kit.sunburst(radius: H, rays: 14, color: SKColor(white: 1, alpha: 0.16))
         rays.position = CGPoint(x: W / 2, y: logoBottomY)
@@ -83,14 +80,6 @@ extension GameScene {
             },
             .fadeIn(withDuration: 0.15)
         ])))
-
-        let hero = Kit.emoji(skinEmoji, size: heroSize)
-        hero.position = CGPoint(x: W / 2, y: heroY - 10)
-        hero.run(.repeatForever(.sequence([
-            .group([.moveBy(x: 0, y: 26, duration: 0.28), .rotate(byAngle: 0.3, duration: 0.28)]),
-            .group([.moveBy(x: 0, y: -26, duration: 0.28), .rotate(byAngle: -0.3, duration: 0.28)])
-        ])))
-        uiLayer.addChild(hero)
 
         let start = PopLabel("タップでスタート", size: 34, color: .gold)
         start.position = CGPoint(x: W / 2, y: startY)
@@ -436,7 +425,9 @@ extension GameScene {
         case .unknown:
             break
         }
-        playerEmoji.text = skinEmoji
+        if phase == .title {
+            world.showIdle(skin: save.selectedSkin, level: save.level)
+        }
     }
 
     func closeModal() {

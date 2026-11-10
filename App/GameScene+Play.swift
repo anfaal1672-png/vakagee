@@ -1,4 +1,5 @@
 import SpriteKit
+import UIKit
 import GameCore
 
 extension GameScene {
@@ -9,7 +10,6 @@ extension GameScene {
         uiLayer.removeAllChildren()
         topFx.removeAllChildren()
         fxLayer.removeAllChildren()
-        worldLayer.removeAllChildren()
         shakeRoot.removeAllActions()
         shakeRoot.position = .zero
         resultCoinLabel = nil
@@ -35,44 +35,23 @@ extension GameScene {
 
         // 行を並べる
         rows = []
-        let firstY = H + 160
+        let firstY: CGFloat = 1000
         let spacing = CGFloat(spec.rowSpacing)
         for (i, row) in spec.rows.enumerated() {
-            let rn = makeRowNode(row, y: firstY + CGFloat(i) * spacing)
-            rows.append(rn)
-            worldLayer.addChild(rn.node)
+            rows.append(RowState(index: i, row: row, y: firstY + CGFloat(i) * spacing))
         }
-
-        // ボス
         bossY = firstY + CGFloat(spec.rows.count) * spacing + 260
-        bossNode = SKNode()
-        let body = Kit.emoji(spec.bossEmoji, size: 150)
-        body.name = "body"
-        bossNode.addChild(body)
-        body.run(.repeatForever(.sequence([
-            .scale(to: 1.08, duration: 0.35),
-            .scale(to: 0.96, duration: 0.35)
-        ])))
-        let nameLabel = PopLabel(spec.bossName, size: 20)
-        nameLabel.position = CGPoint(x: 0, y: 128)
-        nameLabel.fit(maxWidth: W - 40)
-        bossNode.addChild(nameLabel)
-        bossHPLabel = PopLabel("HP " + JPNumber.format(bossHP), size: 34, color: .hotRed)
-        bossHPLabel.position = CGPoint(x: 0, y: 98)
-        bossHPLabel.fit(maxWidth: W - 60)
-        bossNode.addChild(bossHPLabel)
-        worldLayer.addChild(bossNode)
 
-        // プレイヤー
-        playerNode.removeAllActions()
-        playerNode.removeFromParent()
-        playerNode.setScale(1)
-        playerNode.alpha = 1
-        playerNode.zRotation = 0
-        playerEmoji.text = skinEmoji
-        worldLayer.addChild(playerNode)
+        world.buildLevel(
+            spec: spec,
+            rowDistances: rows.map { $0.y - playerY },
+            bossDistance: bossY - playerY,
+            bossHPText: "HP " + JPNumber.format(bossHP),
+            skin: save.selectedSkin
+        )
+        world.applyLook(.normal, level: spec.level)
+
         crowdSize = -1
-        applyWorldState()
         refreshCount(pop: false)
         refreshCombo()
         refreshHUD()
@@ -85,7 +64,7 @@ extension GameScene {
         hintNode = nil
         if !hasMoved {
             let hint = PopLabel("👈 指を左右に動かす 👉", size: 22)
-            hint.position = CGPoint(x: W / 2, y: playerY - 90)
+            hint.position = CGPoint(x: W / 2, y: safeBottom + 70)
             hint.run(.repeatForever(.sequence([
                 .fadeAlpha(to: 0.3, duration: 0.4),
                 .fadeAlpha(to: 1, duration: 0.4)
@@ -95,84 +74,9 @@ extension GameScene {
         }
 
         banner("LEVEL \(spec.level)", color: .white, size: 54, y: H * 0.62, hold: 0.5)
-        banner("ボスの HP は \(JPNumber.format(bossHP))", color: .gold, size: 24, y: H * 0.62 - 56, hold: 0.9)
+        banner("VS \(spec.bossName)", color: .gold, size: 24, y: H * 0.62 - 56, hold: 0.9)
         audio.play(.start)
         Haptics.light()
-    }
-
-    // MARK: - 行の見た目
-
-    func gateColor(_ kind: GateOp.Kind) -> SKColor {
-        switch kind {
-        case .good: return .skyBlue
-        case .bad: return .hotRed
-        case .mystery: return SKColor(red: 0.62, green: 0.3, blue: 0.95, alpha: 1)
-        case .glitch: return SKColor(red: 0.05, green: 0.25, blue: 0.1, alpha: 1)
-        }
-    }
-
-    func makeGatePanel(_ op: GateOp, centerX: CGFloat) -> SKNode {
-        let size = CGSize(width: W / 2 - 10, height: 92)
-        let root = SKNode()
-        root.position = CGPoint(x: centerX, y: 0)
-        let body = Kit.rect(size, color: gateColor(op.kind).withAlphaComponent(0.72), radius: 10)
-        body.strokeColor = .white
-        body.lineWidth = 4
-        root.addChild(body)
-        let label = PopLabel(op.label, size: 36, color: op.kind == .glitch ? .green : .white)
-        label.fit(maxWidth: size.width - 20)
-        root.addChild(label)
-        if op.kind == .glitch {
-            // 壊れかけのゲートはガタガタ震える
-            root.run(.repeatForever(.sequence([
-                .moveBy(x: 4, y: 0, duration: 0.03),
-                .moveBy(x: -7, y: 2, duration: 0.03),
-                .moveBy(x: 3, y: -2, duration: 0.03),
-                .wait(forDuration: 0.25)
-            ])))
-        }
-        return root
-    }
-
-    func makeRowNode(_ row: Row, y: CGFloat) -> RowNode {
-        let rn = RowNode(row: row, y: y)
-        switch row {
-        case .gates(let l, let r):
-            let lp = makeGatePanel(l, centerX: W / 4)
-            let rp = makeGatePanel(r, centerX: W * 3 / 4)
-            rn.leftPanel = lp
-            rn.rightPanel = rp
-            rn.node.addChild(lp)
-            rn.node.addChild(rp)
-            let pole = SKSpriteNode(color: .white, size: CGSize(width: 8, height: 110))
-            pole.position = CGPoint(x: W / 2, y: 0)
-            rn.node.addChild(pole)
-        case .enemy(let side, let value):
-            let cx = side == .left ? W / 4 : W * 3 / 4
-            let group = SKNode()
-            group.position = CGPoint(x: cx, y: 0)
-            let offsets: [CGPoint] = [
-                CGPoint(x: -48, y: 0), CGPoint(x: 0, y: 6), CGPoint(x: 48, y: 0),
-                CGPoint(x: -24, y: -30), CGPoint(x: 24, y: -30)
-            ]
-            for (i, o) in offsets.enumerated() {
-                let e = Kit.emoji(spec.bossEmoji, size: 40)
-                e.position = o
-                e.run(.repeatForever(.sequence([
-                    .wait(forDuration: Double(i) * 0.07),
-                    .moveBy(x: 0, y: 8, duration: 0.15),
-                    .moveBy(x: 0, y: -8, duration: 0.15)
-                ])))
-                group.addChild(e)
-            }
-            let label = PopLabel("−" + JPNumber.format(value), size: 30, color: .hotRed)
-            label.position = CGPoint(x: 0, y: 46)
-            label.fit(maxWidth: W / 2 - 24)
-            group.addChild(label)
-            rn.leftPanel = group
-            rn.node.addChild(group)
-        }
-        return rn
     }
 
     // MARK: - プレイヤーの移動
@@ -199,7 +103,7 @@ extension GameScene {
             edgePush = 0
         }
         playerX = nx
-        playerNode.position.x = nx
+        world.setPlayerX(playerWorldX)
         if let toRight = wrapTo {
             tryWrap(toRight: toRight)
         }
@@ -211,7 +115,8 @@ extension GameScene {
         guard wrapsLeft > 0 else { return }
         wrapsLeft -= 1
         playerX = toRight ? W - 36 : 36
-        playerNode.position.x = playerX
+        world.setPlayerX(playerWorldX)
+        world.warpFlash()
         let before = count
         count = GameRules.wrapDupe(count)
         glitchFlash()
@@ -233,7 +138,7 @@ extension GameScene {
 
     // MARK: - 行の通過
 
-    func pass(_ rn: RowNode) {
+    func pass(_ rn: RowState) {
         let isLeft = playerX < W / 2
         switch rn.row {
         case .gates(let l, let r):
@@ -244,14 +149,7 @@ extension GameScene {
                 op = GameRules.resolveMystery(&runtimeRNG)
                 text = "？ → " + op.label
             }
-            let chosen = isLeft ? rn.leftPanel : rn.rightPanel
-            let other = isLeft ? rn.rightPanel : rn.leftPanel
-            other?.alpha = 0.25
-            chosen?.run(.sequence([
-                .scale(to: 1.25, duration: 0.06),
-                .scale(to: 1.0, duration: 0.12),
-                .fadeAlpha(to: 0.35, duration: 0.2)
-            ]))
+            world.passGate(row: rn.index, left: isLeft)
             let before = count
             count = GameRules.apply(op, to: count)
             countChanged(before: before, text: text, silent: false)
@@ -259,25 +157,18 @@ extension GameScene {
         case .enemy(let side, let value):
             guard !rn.consumed, (side == .left) == isLeft else { return }
             rn.consumed = true
-            rn.leftPanel?.run(.sequence([
-                .group([.scale(to: 1.8, duration: 0.18), .fadeOut(withDuration: 0.18)]),
-                .removeFromParent()
-            ]))
-            burst(at: CGPoint(x: playerX, y: playerY + 40), emoji: "💥", amount: 6)
+            world.scatterEnemy(row: rn.index)
+            world.burst(atPlayer: true, color: .red, amount: 30)
             let before = count
             count = GameRules.hitEnemy(count: count, enemy: value)
             countChanged(before: before, text: "−" + JPNumber.format(value), silent: false)
         }
     }
 
-    func rearm(_ rn: RowNode) {
+    func rearm(_ rn: RowState) {
         guard case .gates = rn.row, !rn.armed else { return }
         rn.armed = true
-        for panel in [rn.leftPanel, rn.rightPanel] {
-            panel?.removeAllActions()
-            panel?.alpha = 1
-            panel?.setScale(1)
-        }
+        world.rearmGate(row: rn.index)
     }
 
     // MARK: - 数が変わったとき
@@ -287,23 +178,25 @@ extension GameScene {
         combo = GameRules.nextCombo(current: combo, before: before, after: count)
         maxCombo = max(maxCombo, combo)
 
+        let anchor = playerPoint()
         floatText(
             text,
-            at: CGPoint(x: min(max(playerX, 90), W - 90), y: playerY + 120),
+            at: CGPoint(x: min(max(anchor.x, 90), W - 90), y: anchor.y + 130),
             color: grew ? .gold : .hotRed,
-            size: 40
+            size: 44
         )
 
         if grew {
             if !silent { audio.play(combo >= 3 ? .big : .good) }
             Haptics.medium()
             hitStop = 0.035
-            burst(at: CGPoint(x: playerX, y: playerY + 30), emoji: "✨", amount: min(4 + combo, 12))
+            world.burst(atPlayer: true, color: .yellow, amount: min(16 + combo * 4, 60))
         } else {
             if !silent { audio.play(.bad) }
             Haptics.error()
             hitStop = 0.07
             shake(9, duration: 0.25)
+            world.burst(atPlayer: true, color: .red, amount: 20)
         }
 
         refreshCount(pop: true)
@@ -327,50 +220,24 @@ extension GameScene {
     }
 
     func refreshCount(pop: Bool) {
-        countLabel.text = JPNumber.format(count)
-        countLabel.fit(maxWidth: 170)
+        let color: UIColor
         switch worldState {
-        case .normal: countLabel.color = .white
-        case .negative: countLabel.color = .neon
-        case .nan: countLabel.color = .magenta
+        case .normal: color = .white
+        case .negative: color = .neon
+        case .nan: color = .magenta
         }
-        if pop { countLabel.punch(1.5) }
+        // 取り巻きの人数(桁が増えるほど増える)
+        let magnitude = count.isNaN ? 1e8 : abs(count)
+        let n = min(30, Int(log10(max(magnitude, 1)) * 3) + Int(min(magnitude, 6)) - 1)
+        crowdSize = max(0, n)
+        world.setCount(text: JPNumber.format(count), color: color, crowd: crowdSize)
+        if pop { world.punchCount() }
 
         // ボスに届いているかを常に見せる
         let enough = GameRules.beatsBoss(count: count, bossHP: bossHP)
         targetLabel.text = "🎯 ボス HP \(JPNumber.format(bossHP))" + (enough ? " ✅" : "")
         targetLabel.color = enough ? .neon : .white
         targetLabel.fit(maxWidth: W - 40)
-
-        // 取り巻きの数(桁が増えるほど増える)
-        let magnitude = count.isNaN ? 1e6 : abs(count)
-        let n = min(12, Int(log10(max(magnitude, 1)) * 1.5) + Int(min(magnitude, 4)) - 1)
-        if n != crowdSize {
-            crowdSize = n
-            rebuildCrowd(max(0, n))
-        }
-    }
-
-    func rebuildCrowd(_ n: Int) {
-        crowdNode.removeAllChildren()
-        let offsets: [CGPoint] = [
-            CGPoint(x: -30, y: -28), CGPoint(x: 30, y: -28), CGPoint(x: 0, y: -44),
-            CGPoint(x: -56, y: -44), CGPoint(x: 56, y: -44), CGPoint(x: -28, y: -66),
-            CGPoint(x: 28, y: -66), CGPoint(x: -78, y: -66), CGPoint(x: 78, y: -66),
-            CGPoint(x: 0, y: -86), CGPoint(x: -52, y: -90), CGPoint(x: 52, y: -90)
-        ]
-        let symbol = worldState == .nan ? "❓" : skinEmoji
-        for i in 0..<min(n, offsets.count) {
-            let e = Kit.emoji(symbol, size: 26)
-            e.position = offsets[i]
-            e.yScale = worldState == .negative ? -1 : 1
-            e.run(.repeatForever(.sequence([
-                .wait(forDuration: Double(i % 4) * 0.05),
-                .moveBy(x: 0, y: 6, duration: 0.12),
-                .moveBy(x: 0, y: -6, duration: 0.12)
-            ])))
-            crowdNode.addChild(e)
-        }
     }
 
     func refreshCombo() {
@@ -390,8 +257,7 @@ extension GameScene {
         let next: WorldState = count.isNaN ? .nan : (count < 0 ? .negative : .normal)
         guard next != worldState else { return }
         worldState = next
-        applyWorldState()
-        crowdSize = -1
+        world.applyLook(worldLook, level: spec.level)
         refreshCount(pop: false)
         glitchFlash()
         switch next {
@@ -414,24 +280,6 @@ extension GameScene {
         }
     }
 
-    func applyWorldState() {
-        applyColors()
-        flipNode.yScale = worldState == .negative ? -1 : 1
-        flipNode.removeAction(forKey: "nan")
-        flipNode.position = .zero
-        flipNode.alpha = 1
-        if worldState == .nan {
-            let jitter = SKAction.sequence([
-                .run { [weak self] in
-                    self?.flipNode.position = CGPoint(x: CGFloat.random(in: -7...7), y: CGFloat.random(in: -5...5))
-                    self?.flipNode.alpha = CGFloat.random(in: 0.4...1)
-                },
-                .wait(forDuration: 0.05)
-            ])
-            flipNode.run(.repeatForever(jitter), withKey: "nan")
-        }
-    }
-
     // MARK: - 全滅
 
     func die() {
@@ -440,12 +288,8 @@ extension GameScene {
         audio.setBGMRate(1.0)
         Haptics.error()
         shake(16, duration: 0.5)
-        burst(at: playerNode.position, emoji: skinEmoji, amount: 10)
-        playerNode.run(.group([
-            .scale(to: 0.1, duration: 0.4),
-            .rotate(byAngle: 9, duration: 0.4),
-            .fadeOut(withDuration: 0.4)
-        ]))
+        world.burst(atPlayer: true, color: .white, amount: 60)
+        world.playerVanish()
         banner("ちょうど 0 で全滅", color: .hotRed, size: 40, y: H * 0.5, hold: 0.7)
         after(1.0) { [weak self] in
             self?.showResult(win: false, wiped: true)
@@ -463,21 +307,10 @@ extension GameScene {
         audio.play(.boss)
         Haptics.heavy()
         banner("VS", color: .hotRed, size: 90, y: H * 0.45, hold: 0.25)
-
-        let target = CGPoint(x: W / 2, y: bossScreenY - 135)
-        let windUp = SKAction.moveBy(x: 0, y: -40, duration: 0.3)
-        windUp.timingMode = .easeOut
-        let dash = SKAction.group([
-            .move(to: target, duration: 0.22),
-            .scale(to: 1.35, duration: 0.22)
-        ])
-        dash.timingMode = .easeIn
-        playerNode.run(.sequence([
-            .wait(forDuration: 0.45),
-            windUp,
-            dash,
-            .run { [weak self] in self?.resolveBoss() }
-        ]))
+        world.playerCharge()
+        after(World3D.chargeDuration) { [weak self] in
+            self?.resolveBoss()
+        }
     }
 
     func resolveBoss() {
@@ -487,53 +320,16 @@ extension GameScene {
         Haptics.heavy()
         flash(.white, alpha: 0.9)
         shake(22, duration: 0.55)
-        burst(at: CGPoint(x: W / 2, y: bossScreenY - 40), emoji: "💥", amount: 14)
+        world.burst(atPlayer: false, color: .orange, amount: 120)
 
         if win {
-            bossHPLabel.text = "HP 0"
-            bossHPLabel.punch(1.8)
-            bossNode.removeAllActions()
-            let side: CGFloat = Bool.random() ? 1 : -1
-            let flyAway = SKAction.group([
-                .moveBy(x: side * 320, y: 900, duration: 0.85),
-                .rotate(byAngle: side * 16, duration: 0.85),
-                .scale(to: 0.35, duration: 0.85)
-            ])
-            // 【仕込みバグ】吹っ飛んだボスがたまに画面の下から帰ってくる
-            let comesBack = runtimeRNG.chance(0.4)
-            let width = W
-            let height = H
-            let ending: SKAction = comesBack
-                ? SKAction.sequence([
-                    .wait(forDuration: 0.5),
-                    .run { [weak self] in
-                        self?.bossNode.position = CGPoint(x: CGFloat.random(in: 60...(width - 60)), y: -120)
-                        self?.bossNode.setScale(0.8)
-                    },
-                    .group([
-                        .moveBy(x: 0, y: height + 400, duration: 1.3),
-                        .rotate(byAngle: 10, duration: 1.3)
-                    ]),
-                    .removeFromParent()
-                ])
-                : SKAction.removeFromParent()
-            // ヒットストップのあとに吹っ飛ぶ
-            bossNode.run(.sequence([.wait(forDuration: 0.12), flyAway, ending]))
+            world.setBossHP("HP 0")
+            // 【仕込みバグ】吹っ飛んだボスがたまに空から帰ってくる
+            world.bossDefeated(comesBack: runtimeRNG.chance(0.4))
             after(0.35) { [weak self] in self?.celebrate() }
         } else {
-            let side: CGFloat = Bool.random() ? 1 : -1
-            playerNode.run(.sequence([
-                .wait(forDuration: 0.1),
-                .group([
-                    .moveBy(x: side * 260, y: -700, duration: 0.7),
-                    .rotate(byAngle: side * 14, duration: 0.7),
-                    .scale(to: 0.4, duration: 0.7)
-                ])
-            ]))
-            bossNode.run(.repeat(.sequence([
-                .scale(to: 1.25, duration: 0.1),
-                .scale(to: 1.0, duration: 0.1)
-            ]), count: 4))
+            world.playerFlung()
+            world.bossLaugh()
             audio.play(.lose)
             banner("力不足…", color: .hotRed, size: 54, y: H * 0.45, hold: 0.6)
             after(1.0) { [weak self] in

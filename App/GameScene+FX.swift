@@ -2,6 +2,7 @@ import SpriteKit
 
 extension GameScene {
     func shake(_ power: CGFloat, duration: TimeInterval) {
+        world.shake(Float(power) * 0.035, duration: duration)
         shakeRoot.removeAction(forKey: "shake")
         let steps = max(2, Int(duration / 0.03))
         var actions: [SKAction] = []

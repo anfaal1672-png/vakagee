@@ -2,16 +2,16 @@ import SpriteKit
 import UIKit
 import GameCore
 
-final class RowNode {
+final class RowState {
+    let index: Int
     let row: Row
+    /// スタート地点からの距離(ポイント)
     let y: CGFloat
-    let node = SKNode()
     var armed = true
     var consumed = false
-    var leftPanel: SKNode?
-    var rightPanel: SKNode?
 
-    init(row: Row, y: CGFloat) {
+    init(index: Int, row: Row, y: CGFloat) {
+        self.index = index
         self.row = row
         self.y = y
     }
@@ -23,6 +23,8 @@ final class GameScene: SKScene {
     enum WorldState { case normal, negative, nan }
 
     // MARK: - 設定(ViewController から渡される)
+    /// 3D の世界。この 2D シーンはその上に重なる透明な UI 層。
+    var world: World3D!
     var safeTop: CGFloat = 50
     var safeBottom: CGFloat = 34
 
@@ -39,18 +41,12 @@ final class GameScene: SKScene {
 
     // MARK: - レイヤー
     let shakeRoot = SKNode()
-    let bgLayer = SKNode()
-    let worldLayer = SKNode()
     let fxLayer = SKNode()
     let hudLayer = SKNode()
     let uiLayer = SKNode()
     let topFx = SKNode()
     let modalLayer = SKNode()
 
-    // MARK: - 背景
-    var road = SKSpriteNode(color: .darkGray, size: CGSize(width: 10, height: 10))
-    var dashes: [SKSpriteNode] = []
-    var decoNodes: [SKLabelNode] = []
     var bgOffset: CGFloat = 0
 
     // MARK: - プレイ中の状態
@@ -60,10 +56,8 @@ final class GameScene: SKScene {
     var combo = 0
     var maxCombo = 0
     var scroll: CGFloat = 0
-    var rows: [RowNode] = []
+    var rows: [RowState] = []
     var bossY: CGFloat = 0
-    var bossNode = SKNode()
-    var bossHPLabel = PopLabel("", size: 30)
     var playerX: CGFloat = 195
     var worldState: WorldState = .normal
     var maxUnitSeen = 0
@@ -80,12 +74,6 @@ final class GameScene: SKScene {
     var debugBossOneHP = false
     var versionTaps = 0
 
-    // MARK: - プレイヤー
-    let playerNode = SKNode()
-    let crowdNode = SKNode()
-    let flipNode = SKNode()
-    let playerEmoji = Kit.emoji("🥟", size: 58)
-    let countLabel = PopLabel("1", size: 34)
     var crowdSize = -1
 
     // MARK: - HUD
@@ -106,8 +94,9 @@ final class GameScene: SKScene {
 
     var W: CGFloat { size.width }
     var H: CGFloat { size.height }
-    var playerY: CGFloat { safeBottom + 170 }
-    var bossScreenY: CGFloat { H * 0.66 }
+    /// コース上の基準位置(ポイント)。画面の大きさには依存しない。
+    var playerY: CGFloat { 200 }
+    var bossScreenY: CGFloat { 580 }
     var skinEmoji: String { SkinCatalog.skin(id: save.selectedSkin).emoji }
 
     // MARK: - セットアップ
@@ -117,11 +106,8 @@ final class GameScene: SKScene {
         didSetup = true
         anchorPoint = .zero
 
-        bgLayer.zPosition = 0
-        worldLayer.zPosition = 10
+        backgroundColor = .clear
         fxLayer.zPosition = 20
-        shakeRoot.addChild(bgLayer)
-        shakeRoot.addChild(worldLayer)
         shakeRoot.addChild(fxLayer)
         addChild(shakeRoot)
         hudLayer.zPosition = 30
@@ -133,46 +119,11 @@ final class GameScene: SKScene {
         addChild(topFx)
         addChild(modalLayer)
 
-        buildBackground()
-        buildPlayer()
         buildHUD()
 
         audio.enabled = save.soundOn
         audio.start()
         showTitle()
-    }
-
-    func buildBackground() {
-        road = SKSpriteNode(color: .darkGray, size: CGSize(width: W - 56, height: H + 240))
-        road.position = CGPoint(x: W / 2, y: H / 2)
-        bgLayer.addChild(road)
-        for _ in 0..<9 {
-            let d = SKSpriteNode(color: .white, size: CGSize(width: 8, height: 54))
-            d.alpha = 0.45
-            dashes.append(d)
-            bgLayer.addChild(d)
-        }
-        let deco = ["🏮", "🎋", "🧧", "🥢", "🍜", "🏯", "🎆", "🐼", "🏮", "🧨"]
-        for e in deco {
-            let l = Kit.emoji(e, size: 24)
-            decoNodes.append(l)
-            bgLayer.addChild(l)
-        }
-        applyColors()
-        scrollBackground(0)
-    }
-
-    func buildPlayer() {
-        playerNode.addChild(crowdNode)
-        flipNode.addChild(playerEmoji)
-        playerNode.addChild(flipNode)
-        countLabel.position = CGPoint(x: 0, y: 60)
-        playerNode.addChild(countLabel)
-        let squash = SKAction.sequence([
-            .scaleX(to: 1.08, y: 0.92, duration: 0.16),
-            .scaleX(to: 0.94, y: 1.08, duration: 0.16)
-        ])
-        playerEmoji.run(.repeatForever(squash))
     }
 
     func buildHUD() {
@@ -246,18 +197,26 @@ final class GameScene: SKScene {
     }
 
     func layoutWorld() {
-        for rn in rows {
-            rn.node.position = CGPoint(x: 0, y: rn.y - scroll)
-        }
-        bossNode.position = CGPoint(x: W / 2, y: bossY - scroll)
-        playerNode.position = CGPoint(x: playerX, y: playerY)
+        world.setScroll(scroll)
+        world.setPlayerX(playerWorldX)
         let total = max(1, bossY - bossScreenY)
         progressFill.xScale = min(1, max(0, scroll / total))
     }
 
-    func wrap(_ v: CGFloat, _ span: CGFloat) -> CGFloat {
-        let r = v.truncatingRemainder(dividingBy: span)
-        return r < 0 ? r + span : r
+    /// 2D 側の横位置を 3D の横位置に直す
+    var playerWorldX: Float {
+        let half = W / 2 - 36
+        return Float((playerX - W / 2) / max(half, 1)) * World3D.laneLimit
+    }
+
+    /// プレイヤーが画面のどこに見えているか(この 2D シーンの座標)
+    func playerPoint() -> CGPoint {
+        guard let view = world.view, view.bounds.width > 0 else {
+            return CGPoint(x: W / 2, y: playerY)
+        }
+        let p = world.playerViewPoint()
+        let scale = W / view.bounds.width
+        return CGPoint(x: min(max(p.x * scale, 60), W - 60), y: min(max(H - p.y * scale, 120), H - 200))
     }
 
     func scrollBackground(_ dt: Double) {
@@ -269,33 +228,14 @@ final class GameScene: SKScene {
             v = 0
         }
         bgOffset += v * CGFloat(dt)
-        let span = H + 240
-        for (i, d) in dashes.enumerated() {
-            let base = CGFloat(i) * span / CGFloat(dashes.count)
-            d.position = CGPoint(x: W / 2, y: wrap(base - bgOffset, span) - 120)
-        }
-        for (i, l) in decoNodes.enumerated() {
-            let base = CGFloat(i) * span / CGFloat(decoNodes.count)
-            let x: CGFloat = i % 2 == 0 ? 14 : W - 14
-            l.position = CGPoint(x: x, y: wrap(base - bgOffset * 0.85, span) - 120)
-        }
+        world.setDecor(offset: Float(bgOffset) * World3D.unit)
     }
 
-    func applyColors() {
+    var worldLook: World3D.Look {
         switch worldState {
-        case .normal:
-            let h = CGFloat((spec.level * 47) % 360) / 360
-            backgroundColor = SKColor.hue(h, s: 0.55, b: 0.95)
-            road.color = SKColor.hue(h + 0.5, s: 0.3, b: 0.32)
-            for d in dashes { d.color = .white }
-        case .negative:
-            backgroundColor = SKColor(red: 0.12, green: 0.0, blue: 0.22, alpha: 1)
-            road.color = SKColor(red: 0.0, green: 0.75, blue: 0.55, alpha: 1)
-            for d in dashes { d.color = .magenta }
-        case .nan:
-            backgroundColor = .black
-            road.color = SKColor(white: 0.14, alpha: 1)
-            for d in dashes { d.color = .green }
+        case .normal: return .normal
+        case .negative: return .negative
+        case .nan: return .nan
         }
     }
 
