@@ -78,6 +78,7 @@ extension GameScene {
         refreshHUD()
         layoutWorld()
         hudLayer.isHidden = false
+        comboLabel.isHidden = true
 
         // 最初のレベルだけ操作説明
         hintNode?.removeFromParent()
@@ -335,6 +336,12 @@ extension GameScene {
         }
         if pop { countLabel.punch(1.5) }
 
+        // ボスに届いているかを常に見せる
+        let enough = GameRules.beatsBoss(count: count, bossHP: bossHP)
+        targetLabel.text = "🎯 ボス HP \(JPNumber.format(bossHP))" + (enough ? " ✅" : "")
+        targetLabel.color = enough ? .neon : .white
+        targetLabel.fit(maxWidth: W - 40)
+
         // 取り巻きの数(桁が増えるほど増える)
         let magnitude = count.isNaN ? 1e6 : abs(count)
         let n = min(12, Int(log10(max(magnitude, 1)) * 1.5) + Int(min(magnitude, 4)) - 1)
@@ -369,7 +376,8 @@ extension GameScene {
     func refreshCombo() {
         if combo >= 2 {
             comboLabel.isHidden = false
-            comboLabel.text = "COMBO ×\(combo)"
+            comboLabel.text = combo >= 5 ? "🔥COMBO ×\(combo)🔥" : "COMBO ×\(combo)"
+            comboLabel.fit(maxWidth: W - 60)
             comboLabel.punch(min(2.0, 1.3 + CGFloat(combo) * 0.05))
         } else {
             comboLabel.isHidden = true

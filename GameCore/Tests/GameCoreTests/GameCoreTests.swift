@@ -143,7 +143,7 @@ final class GameRulesTests: XCTestCase {
     func testMysteryResolvesToConcreteOp() {
         var rng = SeededRNG(seed: 1)
         var seen = Set<String>()
-        for _ in 0..<500 {
+        for _ in 0..<2000 {
             let op = GameRules.resolveMystery(&rng)
             XCTAssertNotEqual(op, .mystery)
             seen.insert(op.label)
@@ -223,6 +223,18 @@ final class LevelGeneratorTests: XCTestCase {
             }
         }
         XCTAssertGreaterThan(special, 20)
+    }
+
+    func testEnemyRowsNeverComeBackToBack() {
+        for level in 1...200 {
+            var previousWasEnemy = false
+            for row in LevelGenerator.make(level: level).rows {
+                var isEnemy = false
+                if case .enemy = row { isEnemy = true }
+                XCTAssertFalse(isEnemy && previousWasEnemy, "level \(level)")
+                previousWasEnemy = isEnemy
+            }
+        }
     }
 
     func testBossNamesCycleForever() {

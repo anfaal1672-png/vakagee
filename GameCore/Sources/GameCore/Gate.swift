@@ -73,10 +73,10 @@ public enum GameRules {
     /// ？？？ゲートの中身を決める。
     public static func resolveMystery(_ rng: inout SeededRNG) -> GateOp {
         let roll = rng.unit()
-        if roll < 0.38 { return .mul(10) }
-        if roll < 0.60 { return .div(10) }
-        if roll < 0.80 { return .negate }
-        if roll < 0.93 { return .square }
+        if roll < 0.40 { return .mul(10) }
+        if roll < 0.62 { return .div(10) }
+        if roll < 0.82 { return .negate }
+        if roll < 0.96 { return .square }
         return .nan
     }
 

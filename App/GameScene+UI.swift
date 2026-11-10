@@ -23,17 +23,28 @@ extension GameScene {
         applyColors()
         audio.setBGMRate(1.0)
 
+        // 下から積み上げる位置と、上から吊るす位置
+        let buttonsY = safeBottom + 78
+        let infoY = buttonsY + 58
+        let startY = infoY + 50
+        let logoTopY = H - safeTop - 110
+        let logoBottomY = logoTopY - 100
+        let subY = logoBottomY - 80
+        let tickerY = subY - 30
+        let heroY = (tickerY + startY) / 2
+        let heroSize = min(120, max(50, tickerY - startY - 90))
+
         let rays = Kit.sunburst(radius: H, rays: 14, color: SKColor(white: 1, alpha: 0.16))
-        rays.position = CGPoint(x: W / 2, y: H * 0.62)
+        rays.position = CGPoint(x: W / 2, y: logoBottomY)
         rays.run(.repeatForever(.rotate(byAngle: 1, duration: 4)))
         uiLayer.addChild(rays)
 
         let logoTop = PopLabel("インフレ", size: 70, color: .gold)
-        logoTop.position = CGPoint(x: W / 2, y: H * 0.76)
+        logoTop.position = CGPoint(x: W / 2, y: logoTopY)
         logoTop.zRotation = -0.05
         uiLayer.addChild(logoTop)
         let logoBottom = PopLabel("餃子", size: 110, color: .white)
-        logoBottom.position = CGPoint(x: W / 2, y: H * 0.76 - 100)
+        logoBottom.position = CGPoint(x: W / 2, y: logoBottomY)
         logoBottom.zRotation = 0.04
         uiLayer.addChild(logoBottom)
         for (i, l) in [logoTop, logoBottom].enumerated() {
@@ -45,19 +56,44 @@ extension GameScene {
         }
 
         let sub = PopLabel("〜 数字がデカいほうが勝つ 〜", size: 20)
-        sub.position = CGPoint(x: W / 2, y: H * 0.76 - 180)
+        sub.position = CGPoint(x: W / 2, y: subY)
         uiLayer.addChild(sub)
 
-        let hero = Kit.emoji(skinEmoji, size: 120)
-        hero.position = CGPoint(x: W / 2, y: H * 0.36)
+        // うさんくさい宣伝文句(全部うそ)
+        let claims = [
+            "★★★★★ レビュー 9999万件(うそ)",
+            "全世界 80億人が熱狂(してない)",
+            "IQ 300 以上しかクリアできない(できる)",
+            "今だけ無料(ずっと無料)",
+            "バグは仕様です"
+        ]
+        let ticker = PopLabel(claims[0], size: 15, color: SKColor(white: 1, alpha: 0.9))
+        ticker.position = CGPoint(x: W / 2, y: tickerY)
+        ticker.fit(maxWidth: W - 30)
+        uiLayer.addChild(ticker)
+        var claimIndex = 0
+        ticker.run(.repeatForever(.sequence([
+            .wait(forDuration: 1.8),
+            .fadeOut(withDuration: 0.15),
+            .run { [weak ticker] in
+                guard let ticker = ticker else { return }
+                claimIndex = (claimIndex + 1) % claims.count
+                ticker.text = claims[claimIndex]
+                ticker.fit(maxWidth: 360)
+            },
+            .fadeIn(withDuration: 0.15)
+        ])))
+
+        let hero = Kit.emoji(skinEmoji, size: heroSize)
+        hero.position = CGPoint(x: W / 2, y: heroY - 10)
         hero.run(.repeatForever(.sequence([
-            .group([.moveBy(x: 0, y: 30, duration: 0.28), .rotate(byAngle: 0.3, duration: 0.28)]),
-            .group([.moveBy(x: 0, y: -30, duration: 0.28), .rotate(byAngle: -0.3, duration: 0.28)])
+            .group([.moveBy(x: 0, y: 26, duration: 0.28), .rotate(byAngle: 0.3, duration: 0.28)]),
+            .group([.moveBy(x: 0, y: -26, duration: 0.28), .rotate(byAngle: -0.3, duration: 0.28)])
         ])))
         uiLayer.addChild(hero)
 
         let start = PopLabel("タップでスタート", size: 34, color: .gold)
-        start.position = CGPoint(x: W / 2, y: H * 0.22)
+        start.position = CGPoint(x: W / 2, y: startY)
         start.run(.repeatForever(.sequence([
             .scale(to: 1.12, duration: 0.35),
             .scale(to: 1.0, duration: 0.35)
@@ -66,11 +102,11 @@ extension GameScene {
 
         let info = PopLabel("LEVEL \(save.level)   最高記録 \(JPNumber.format(save.bestCount))個", size: 18)
         info.fit(maxWidth: W - 40)
-        info.position = CGPoint(x: W / 2, y: H * 0.22 - 46)
+        info.position = CGPoint(x: W / 2, y: infoY)
         uiLayer.addChild(info)
 
         let shop = Kit.button(id: "shop", text: "🛒 ショップ", size: CGSize(width: 170, height: 56), color: .skyBlue, fontSize: 22)
-        shop.position = CGPoint(x: W / 2 - 95, y: safeBottom + 78)
+        shop.position = CGPoint(x: W / 2 - 95, y: buttonsY)
         uiLayer.addChild(shop)
         let sound = Kit.button(
             id: "sound",
@@ -79,7 +115,7 @@ extension GameScene {
             color: SKColor(white: 0.25, alpha: 1),
             fontSize: 22
         )
-        sound.position = CGPoint(x: W / 2 + 95, y: safeBottom + 78)
+        sound.position = CGPoint(x: W / 2 + 95, y: buttonsY)
         uiLayer.addChild(sound)
 
         let coins = PopLabel("🪙 \(JPNumber.format(Double(save.coins)))", size: 22, color: .gold)
@@ -208,6 +244,23 @@ extension GameScene {
             l.run(.sequence([.wait(forDuration: 0.15 + Double(i) * 0.1), .fadeIn(withDuration: 0.15)]))
             uiLayer.addChild(l)
         }
+
+        // バグ探しのヒントになる「うわさ」
+        let rumors = [
+            "マイナスは終わりではないらしい",
+            "壁の向こうに行った餃子がいるらしい",
+            "下に弾くと時間が戻るらしい",
+            "コインは叩くと増えるらしい",
+            "バージョン表記を連打した人がいるらしい",
+            "マイナスの √ は誰も計算できないらしい",
+            "ちょうど 0 だけは本当にダメらしい"
+        ]
+        let rumor = PopLabel("💬 うわさ: " + rumors[runtimeRNG.int(0, rumors.count - 1)], size: 15)
+        rumor.fit(maxWidth: W - 30)
+        rumor.position = CGPoint(x: W / 2, y: H - safeTop - 28)
+        rumor.alpha = 0
+        rumor.run(.sequence([.wait(forDuration: 0.6), .fadeIn(withDuration: 0.3)]))
+        uiLayer.addChild(rumor)
 
         // コイン(数え上げ中に連打すると増える。直していない)
         let coinHit = Kit.rect(CGSize(width: 300, height: 84), color: .clear)

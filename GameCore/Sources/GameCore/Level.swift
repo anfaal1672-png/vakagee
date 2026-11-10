@@ -61,7 +61,11 @@ public enum LevelGenerator {
             var chosenGreedy = greedy
             var ok = false
             for _ in 0..<24 {
-                let row = randomRow(index: i, level: level, start: start, current: greedy, rng: &rng)
+                var allowEnemy = true
+                if let last = rows.last, case .enemy = last { allowEnemy = false }
+                let row = randomRow(
+                    index: i, level: level, start: start, current: greedy, allowEnemy: allowEnemy, rng: &rng
+                )
                 let g = greedyStep(row: row, count: greedy)
                 if g.isFinite && g >= 1 {
                     chosen = row
@@ -79,7 +83,7 @@ public enum LevelGenerator {
 
         // 難易度: 最初はゆるく、レベル 10 に向けて厳しくなる
         let t = min(1.0, Double(level - 1) / 9.0)
-        let factor = 0.25 + 0.45 * t
+        let factor = 0.25 + 0.35 * t
         let hp = max(1, (greedy * factor).rounded(.towardZero))
         let boss = bosses[(level - 1) % bosses.count]
         let lap = (level - 1) / bosses.count
@@ -147,13 +151,17 @@ public enum LevelGenerator {
         let roll = rng.unit()
         if level >= 4 && roll < 0.12 { return .sqrt }
         if roll < 0.55 {
+            // 序盤は引かれすぎない(裏世界は少し慣れてから見つけてほしい)
             let base = max(start, current * 0.4)
-            return .sub(roundNice(max(1, base * rng.range(0.4, 2.2))))
+            let hi = level <= 2 ? 1.2 : 2.2
+            return .sub(roundNice(max(1, base * rng.range(0.4, hi))))
         }
         return .div(Double(rng.int(2, level >= 5 ? 5 : 3)))
     }
 
-    private static func randomRow(index: Int, level: Int, start: Double, current: Double, rng: inout SeededRNG) -> Row {
+    private static func randomRow(
+        index: Int, level: Int, start: Double, current: Double, allowEnemy: Bool, rng: inout SeededRNG
+    ) -> Row {
         // 最初の行は必ずやさしい足し算
         if index == 0 {
             let a = GateOp.add(roundNice(max(1, start * rng.range(1.0, 2.0))))
@@ -161,7 +169,7 @@ public enum LevelGenerator {
             return rng.chance(0.5) ? .gates(left: a, right: b) : .gates(left: b, right: a)
         }
 
-        if level >= 2 && rng.chance(0.22) {
+        if level >= 2 && allowEnemy && rng.chance(0.24) {
             let v = roundNice(max(1, max(start, current * 0.5) * rng.range(0.5, 2.5)))
             return .enemy(side: rng.chance(0.5) ? .left : .right, value: v)
         }
@@ -169,7 +177,7 @@ public enum LevelGenerator {
         var a: GateOp
         var b: GateOp
         let roll = rng.unit()
-        if level >= 6 && roll < 0.05 {
+        if level >= 6 && roll < 0.025 {
             a = .nan
             b = goodOp(level: level, start: start, current: current, rng: &rng)
         } else if level >= 3 && roll < 0.16 {

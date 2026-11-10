@@ -96,6 +96,17 @@ final class AudioEngine {
         engine.mainMixerNode.outputVolume = 0.85
         buildSfx()
         bgmBuffer = buildBGM()
+
+        // イヤホンの抜き差しなどでエンジンが止まったら鳴らし直す
+        NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            self.bgm.stop()
+            self.start()
+        }
     }
 
     // MARK: - 合成

@@ -92,6 +92,7 @@ final class GameScene: SKScene {
     let levelLabel = PopLabel("LEVEL 1", size: 20)
     let coinLabel = PopLabel("🪙 0", size: 20)
     let comboLabel = PopLabel("", size: 30, color: .gold)
+    let targetLabel = PopLabel("", size: 18)
     let progressFill = SKSpriteNode(color: .gold, size: CGSize(width: 10, height: 10))
     var hintNode: SKNode?
 
@@ -192,7 +193,10 @@ final class GameScene: SKScene {
         progressFill.xScale = 0
         hudLayer.addChild(progressFill)
 
-        comboLabel.position = CGPoint(x: W / 2, y: top - 70)
+        targetLabel.position = CGPoint(x: W / 2, y: top - 50)
+        hudLayer.addChild(targetLabel)
+
+        comboLabel.position = CGPoint(x: W / 2, y: top - 96)
         comboLabel.isHidden = true
         hudLayer.addChild(comboLabel)
         refreshHUD()
@@ -297,12 +301,14 @@ final class GameScene: SKScene {
 
     // MARK: - 入力
 
-    func buttonID(at point: CGPoint) -> String? {
+    /// その位置にあるボタンの ID。重なっている場合は `accept` が真になる最初のものを返す。
+    func buttonID(at point: CGPoint, accept: (String) -> Bool) -> String? {
         for hit in nodes(at: point) {
             var node: SKNode? = hit
             while let n = node {
                 if let name = n.name, name.hasPrefix("btn:") {
-                    return String(name.dropFirst(4))
+                    let id = String(name.dropFirst(4))
+                    if accept(id) { return id }
                 }
                 node = n.parent
             }
@@ -344,10 +350,9 @@ final class GameScene: SKScene {
     }
 
     func handleTap(_ point: CGPoint) {
-        let id = buttonID(at: point)
-
         switch modal {
         case .shop:
+            let id = buttonID(at: point) { $0 == "shopclose" || $0.hasPrefix("skin:") }
             if id == "shopclose" {
                 audio.play(.tap)
                 closeModal()
@@ -356,11 +361,13 @@ final class GameScene: SKScene {
             }
             return
         case .debug:
-            handleDebug(id)
+            handleDebug(buttonID(at: point) { $0.hasPrefix("dbg:") })
             return
         case .none:
             break
         }
+
+        let id = buttonID(at: point) { !$0.hasPrefix("skin:") && !$0.hasPrefix("dbg:") && $0 != "shopclose" }
 
         switch phase {
         case .title:
