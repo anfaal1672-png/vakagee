@@ -1,0 +1,41 @@
+name: InflaGyoza
+options:
+  bundleIdPrefix: com.vakagee
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+packages:
+  GameCore:
+    path: GameCore
+targets:
+  InflaGyoza:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: GameCore
+        product: GameCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vakagee.inflagyoza
+        PRODUCT_NAME: InflaGyoza
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: Config/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_BITCODE: "NO"
+        # 証明書なしでビルドする(署名は入れる人が Sideloadly などで行う)
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGN_IDENTITY: ""
+schemes:
+  InflaGyoza:
+    build:
+      targets:
+        InflaGyoza: all
+    archive:
+      config: Release
