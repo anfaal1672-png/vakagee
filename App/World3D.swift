@@ -61,14 +61,14 @@ final class World3D {
         // 光
         let ambient = SCNLight()
         ambient.type = .ambient
-        ambient.intensity = 550
+        ambient.intensity = 420
         let ambientNode = SCNNode()
         ambientNode.light = ambient
         scene.rootNode.addChildNode(ambientNode)
 
         let sun = SCNLight()
         sun.type = .directional
-        sun.intensity = 900
+        sun.intensity = 720
         sun.castsShadow = true
         sun.shadowColor = UIColor(white: 0, alpha: 0.4)
         sun.shadowRadius = 4
@@ -328,6 +328,8 @@ final class World3D {
         rebuildBodies(count: 6)
         cameraRig.removeAction(forKey: "orbit")
         cameraRig.eulerAngles = SCNVector3(0, 0, 0)
+        cameraNode.removeAllActions()
+        cameraNode.position = cameraBase
         let swing = SCNAction.sequence([
             SCNAction.rotateBy(x: 0, y: 0.5, z: 0, duration: 3),
             SCNAction.rotateBy(x: 0, y: -1.0, z: 0, duration: 6),

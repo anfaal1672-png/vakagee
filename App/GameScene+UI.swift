@@ -23,13 +23,14 @@ extension GameScene {
         audio.setBGMRate(1.0)
 
         // 下から積み上げる位置と、上から吊るす位置
-        let buttonsY = safeBottom + 78
-        let infoY = buttonsY + 58
-        let startY = infoY + 50
-        let logoTopY = H - safeTop - 110
+        // 画面の下 3 分の 1 には 3D の餃子たちが映るので、文字はそこを避ける
+        let buttonsY = safeBottom + 62
+        let infoY = H - safeTop - 50
+        let logoTopY = H - safeTop - 132
         let logoBottomY = logoTopY - 100
         let subY = logoBottomY - 80
         let tickerY = subY - 30
+        let startY = (tickerY + H * 0.31) / 2
 
         let rays = Kit.sunburst(radius: H, rays: 14, color: SKColor(white: 1, alpha: 0.16))
         rays.position = CGPoint(x: W / 2, y: logoBottomY)
@@ -112,9 +113,9 @@ extension GameScene {
         uiLayer.addChild(coins)
 
         // 【仕込みバグ】ここを 7 回タップすると消し忘れのデバッグメニューが開く
-        let versionHit = Kit.rect(CGSize(width: 120, height: 34), color: .clear)
+        let versionHit = Kit.rect(CGSize(width: 120, height: 26), color: .clear)
         versionHit.name = "btn:version"
-        versionHit.position = CGPoint(x: W / 2, y: safeBottom + 22)
+        versionHit.position = CGPoint(x: W / 2, y: safeBottom + 10)
         let version = PopLabel(GameScene.appVersion, size: 13, color: SKColor(white: 1, alpha: 0.7))
         versionHit.addChild(version)
         uiLayer.addChild(versionHit)
